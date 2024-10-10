@@ -1,34 +1,31 @@
-# This config was automatically generated from your source code
-# Stacks detected: deps:python:.
+setup: true
 version: 2.1
 orbs:
-  python: circleci/python@2
-jobs:
-  test-python:
-    # Install dependencies and run tests
-    docker:
-      - image: cimg/python:3.8-node
-    steps:
-      - checkout
-      - python/install-packages
-      - run:
-          name: Run tests
-          command: pytest --junitxml=junit.xml || ((($? == 5)) && echo 'Did not find any tests to run.')
-      - store_test_results:
-          path: junit.xml
-  deploy:
-    # This is an example deploy job, not actually used by the workflow
-    docker:
-      - image: cimg/base:stable
-    steps:
-      # Replace this with steps to deploy to users
-      - run:
-          name: deploy
-          command: '#e.g. ./deploy.sh'
+  continuation: circleci/continuation@1.0.0
 workflows:
-  build-and-test:
+  setup:
     jobs:
-      - test-python
-    # - deploy:
-    #     requires:
-    #       - test-python
+      - continuation/continue:
+          configuration_path: ".circleci/on_pr.yml"
+          parameters: /home/circleci/params.jobs
+          pre-steps:
+            - run:
+                name: Install jq
+                command: sudo apt-get update && sudo apt-get install -y jq
+            - run:
+                name: Set Pipeline Parameters
+                command: |
+                  if [ -n "${CIRCLE_PULL_REQUEST}" ]; then
+                    PR_NUMBER=$(echo "${CIRCLE_PULL_REQUEST}" | sed 's#.*/pull/##')
+                    DESTINATION_BRANCH=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+                      https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/pulls/${PR_NUMBER} | \
+                      jq -r '.base.ref')
+                    if [[ "${DESTINATION_BRANCH}" == "dev" || "${DESTINATION_BRANCH}" == "staging" || "${DESTINATION_BRANCH}" == "master" ]]; then
+                      IS_PR=true
+                    else
+                      IS_PR=false
+                    fi
+                    echo '{ "is_pr": '${IS_PR}', "destination_branch": "'${DESTINATION_BRANCH}'" }' > /home/circleci/params.json
+                  else
+                    echo '{ "is_pr": false }' > /home/circleci/params.json
+                  fi
