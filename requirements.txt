@@ -3,3 +3,5 @@ requests
 loguru
 pymongo
 python-dotenv
+flake8
+pytest
