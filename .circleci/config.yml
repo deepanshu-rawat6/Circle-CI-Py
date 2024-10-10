@@ -15,6 +15,7 @@ workflows:
             - run:
                 name: Set Pipeline Parameters
                 command: |
+                  echo "${CIRCLE_PULL_REQUEST}"
                   if [ -n "${CIRCLE_PULL_REQUEST}" ]; then
                     PR_NUMBER=$(echo "${CIRCLE_PULL_REQUEST}" | sed 's#.*/pull/##')
                     DESTINATION_BRANCH=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
@@ -28,4 +29,5 @@ workflows:
                     echo '{ "is_pr": '${IS_PR}', "destination_branch": "'${DESTINATION_BRANCH}'" }' > /home/circleci/params.json
                   else
                     echo '{ "is_pr": false }' > /home/circleci/params.json
+                    cat /home/circleci/params.json 
                   fi
