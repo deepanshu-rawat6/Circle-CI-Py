@@ -11,7 +11,7 @@ workflows:
           pre-steps:
             - run:
                 name: Setup params
-                command: mkdir  ~/circleci && touch ~/circleci/params.json
+                command: touch ./circleci/params.json
             - run:
                 name: Install jq
                 command: sudo apt-get update && sudo apt-get install -y jq
@@ -29,8 +29,8 @@ workflows:
                     else
                       IS_PR=false
                     fi
-                    echo '{ "is_pr": '${IS_PR}', "destination_branch": "'${DESTINATION_BRANCH}'" }' > ~/circleci/params.json
+                    echo '{ "is_pr": '${IS_PR}', "destination_branch": "'${DESTINATION_BRANCH}'" }' > ./circleci/params.json
                   else
-                    echo '{ "is_pr": false }' > ~/circleci/params.json
-                    cat ~/circleci/params.json 
+                    echo '{ "is_pr": false }' > ./circleci/params.json
+                    cat ./circleci/params.json 
                   fi
