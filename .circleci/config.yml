@@ -1,36 +1,169 @@
-setup: true
 version: 2.1
-orbs:
-  continuation: circleci/continuation@1.0.0
+
+jobs:
+  checkout_code:
+    docker:
+      - image: circleci/python:3.8
+    steps:
+      - checkout
+      - run:
+          name: Checkout source code
+          command: git checkout $CIRCLE_BRANCH
+
+  linting:
+    docker:
+      - image: circleci/python:3.8
+    steps:
+      - checkout
+      - run:
+          name: Check linting
+          command: |
+            # Run linter (e.g., pylint)
+            pylint --errors-only ./src
+
+  run_tests:
+    docker:
+      - image: circleci/python:3.8
+    steps:
+      - checkout
+      - run:
+          name: Run tests
+          command: echo "Test done"
+
+  notify_slack:
+    docker:
+      - image: circleci/python:3.8
+    steps:
+      - run:
+          name: Send Slack notification (Phase-2)
+          command: |
+            curl -X POST -H 'Content-type: application/json' --data '{"text": "Job Completed"}' $SLACK_WEBHOOK_URL
+
+  comment_on_pr_failure:
+    docker:
+      - image: circleci/python:3.8
+    steps:
+      - checkout
+      - run:
+          name: Comment on PR if Job Fails
+          command: |
+            GITHUB_API_TOKEN=$GITHUB_TOKEN
+            curl -X POST -H "Authorization: token $GITHUB_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"body": "PR failed at stage: ${CIRCLE_JOB}. Check the job link: ${CIRCLE_BUILD_URL}"}' \
+            https://api.github.com/repos/<owner>/<repo>/issues/${CIRCLE_PULL_REQUEST}/comments
+
 workflows:
-  setup:
+  version: 2
+  feature_pr_workflow:
     jobs:
-      - continuation/continue:
-          configuration_path: ".circleci/on_pr.yml"
-          parameters: ~/circleci/params.json
-          pre-steps:
-            - run:
-                name: Setup params
-                command: mkdir ~/circleci && touch ~/circleci/params.json
-            - run:
-                name: Install jq
-                command: sudo apt-get update && sudo apt-get install -y jq
-            - run:
-                name: Set Pipeline Parameters
-                command: |
-                  echo ${CIRCLE_PULL_REQUEST}
-                  if [ -n "${CIRCLE_PULL_REQUEST}" ]; then
-                    PR_NUMBER=$(echo "${CIRCLE_PULL_REQUEST}" | sed 's#.*/pull/##')
-                    DESTINATION_BRANCH=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
-                      https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/pulls/${PR_NUMBER} | \
-                      jq -r '.base.ref')
-                    if [[ "${DESTINATION_BRANCH}" == "dev" || "${DESTINATION_BRANCH}" == "staging" || "${DESTINATION_BRANCH}" == "master" ]]; then
-                      IS_PR=true
-                    else
-                      IS_PR=false
-                    fi
-                    echo '{ "is_pr": '${IS_PR}', "destination_branch": "'${DESTINATION_BRANCH}'" }' > ~/circleci/params.json
-                  else
-                    echo '{ "is_pr": false }' > ~/circleci/params.json
-                    cat ~/circleci/params.json 
-                  fi
+      - checkout_code:
+          filters:
+            branches:
+              only:
+                - dev # Source branch to dev
+          requires:
+            - checkout_code
+      - linting:
+          requires:
+            - checkout_code
+          filters:
+            branches:
+              only:
+                - dev
+      - run_tests:
+          requires:
+            - linting
+          filters:
+            branches:
+              only:
+                - dev
+      - notify_slack:
+          requires:
+            - run_tests
+          filters:
+            branches:
+              only:
+                - dev
+      - comment_on_pr_failure:
+          requires:
+            - run_tests
+          condition: on_failure
+          filters:
+            branches:
+              only:
+                - dev
+
+  dev_to_stage_workflow:
+    jobs:
+      - checkout_code:
+          filters:
+            branches:
+              only:
+                - staging # Source branch to staging
+      - linting:
+          requires:
+            - checkout_code
+          filters:
+            branches:
+              only:
+                - staging
+      - run_tests:
+          requires:
+            - linting
+          filters:
+            branches:
+              only:
+                - staging
+      - notify_slack:
+          requires:
+            - run_tests
+          filters:
+            branches:
+              only:
+                - staging
+      - comment_on_pr_failure:
+          requires:
+            - run_tests
+          condition: on_failure
+          filters:
+            branches:
+              only:
+                - staging
+
+  stage_to_master_workflow:
+    jobs:
+      - checkout_code:
+          filters:
+            branches:
+              only:
+                - master # Source branch to master
+      - linting:
+          requires:
+            - checkout_code
+          filters:
+            branches:
+              only:
+                - master
+      - run_tests:
+          requires:
+            - linting
+          filters:
+            branches:
+              only:
+                - master
+      - notify_slack:
+          requires:
+            - run_tests
+          filters:
+            branches:
+              only:
+                - master
+      - comment_on_pr_failure:
+          requires:
+            - run_tests
+          condition: on_failure
+          filters:
+            branches:
+              only:
+                - master
