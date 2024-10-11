@@ -62,8 +62,6 @@ workflows:
             branches:
               only:
                 - dev # Source branch to dev
-          requires:
-            - checkout_code
       - linting:
           requires:
             - checkout_code
@@ -85,14 +83,15 @@ workflows:
             branches:
               only:
                 - dev
+          when: always
       - comment_on_pr_failure:
           requires:
             - run_tests
-          condition: on_failure
           filters:
             branches:
               only:
                 - dev
+          when: on_fail # Run only if the 'run_tests' job fails
 
   dev_to_stage_workflow:
     jobs:
@@ -122,14 +121,15 @@ workflows:
             branches:
               only:
                 - staging
+          when: always
       - comment_on_pr_failure:
           requires:
             - run_tests
-          condition: on_failure
           filters:
             branches:
               only:
                 - staging
+          when: on_fail # Run only if the 'run_tests' job fails
 
   stage_to_master_workflow:
     jobs:
@@ -159,11 +159,12 @@ workflows:
             branches:
               only:
                 - master
+          when: always
       - comment_on_pr_failure:
           requires:
             - run_tests
-          condition: on_failure
           filters:
             branches:
               only:
                 - master
+          when: on_fail # Run only if the 'run_tests' job fails
