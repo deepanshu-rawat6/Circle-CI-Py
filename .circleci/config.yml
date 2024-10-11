@@ -83,7 +83,7 @@ workflows:
             branches:
               only:
                 - dev
-          when: always
+          # Slack notification will always run
       - comment_on_pr_failure:
           requires:
             - run_tests
@@ -91,7 +91,8 @@ workflows:
             branches:
               only:
                 - dev
-          when: on_fail # Run only if the 'run_tests' job fails
+          # Use `type: fail` to trigger only on failure
+          type: fail
 
   dev_to_stage_workflow:
     jobs:
@@ -121,7 +122,7 @@ workflows:
             branches:
               only:
                 - staging
-          when: always
+          # Slack notification will always run
       - comment_on_pr_failure:
           requires:
             - run_tests
@@ -129,7 +130,7 @@ workflows:
             branches:
               only:
                 - staging
-          when: on_fail # Run only if the 'run_tests' job fails
+          type: fail
 
   stage_to_master_workflow:
     jobs:
@@ -159,7 +160,7 @@ workflows:
             branches:
               only:
                 - master
-          when: always
+          # Slack notification will always run
       - comment_on_pr_failure:
           requires:
             - run_tests
@@ -167,4 +168,4 @@ workflows:
             branches:
               only:
                 - master
-          when: on_fail # Run only if the 'run_tests' job fails
+          type: fail
