@@ -1,34 +1,100 @@
-# This config was automatically generated from your source code
-# Stacks detected: deps:python:.
 version: 2.1
-orbs:
-  python: circleci/python@2
+
 jobs:
-  test-python:
-    # Install dependencies and run tests
-    docker:
-      - image: cimg/python:3.8-node
-    steps:
-      - checkout
-      - python/install-packages
-      - run:
-          name: Run tests
-          command: pytest --junitxml=junit.xml || ((($? == 5)) && echo 'Did not find any tests to run.')
-      - store_test_results:
-          path: junit.xml
-  deploy:
-    # This is an example deploy job, not actually used by the workflow
-    docker:
-      - image: cimg/base:stable
-    steps:
-      # Replace this with steps to deploy to users
-      - run:
-          name: deploy
-          command: '#e.g. ./deploy.sh'
+    # Job for checking out the code
+    checkout_code:
+        docker:
+            - image: circleci/python:3.8
+        steps:
+            - checkout
+
+    # Job for linting
+    lint_code:
+        docker:
+            - image: circleci/python:3.8
+        steps:
+            - checkout
+            - run:
+                  name: Lint Code
+                  command: |
+                      echo "Running lint..."
+                      # Insert your lint command here, for example:
+                      # flake8 .
+
+    # Job for testing code
+    run_tests:
+        docker:
+            - image: circleci/python:3.8
+        steps:
+            - checkout
+            - run:
+                  name: Run Tests
+                  command: |
+                      echo "Running tests..."
+                      # Insert your test command here, for example:
+                      # pytest
+            - run:
+                  name: Print Test Done
+                  command: echo "Test done."
+
+    # Phase-2: Job for sending Slack notifications
+    send_slack_notification:
+        docker:
+            - image: circleci/python:3.8
+        steps:
+            - run:
+                  name: Send Notification
+                  command: |
+                      # Insert slack notification script here
+                      echo "Sending Slack notification..."
+
 workflows:
-  build-and-test:
-    jobs:
-      - test-python
-    # - deploy:
-    #     requires:
-    #       - test-python
+    pr_workflow:
+        jobs:
+            - checkout_code:
+                  filters:
+                      branches:
+                          only:
+                              - dev
+                              - stage
+                              - master
+
+            - lint_code:
+                  requires:
+                      - checkout_code
+                  filters:
+                      branches:
+                          only:
+                              - dev
+                              - stage
+                              - master
+
+            - run_tests:
+                  requires:
+                      - lint_code
+                  filters:
+                      branches:
+                          only:
+                              - dev
+                              - stage
+                              - master
+
+            - send_slack_notification:
+                  requires:
+                      - run_tests
+                  filters:
+                      branches:
+                          only:
+                              - dev
+                              - stage
+                              - master
+
+commands:
+    add_github_comment:
+        steps:
+            - run:
+                  name: Add GitHub Comment
+                  command: |
+                      if [[ ! -z "$CIRCLE_PULL_REQUEST" ]]; then
+                        gh pr comment $CIRCLE_PULL_REQUEST --body "PR failed on stage $CIRCLE_JOB. [Link: $CIRCLE_BUILD_URL]"
+                      fi
