@@ -1,171 +1,101 @@
 version: 2.1
 
 jobs:
-  checkout_code:
-    docker:
-      - image: circleci/python:3.8
-    steps:
-      - checkout
-      - run:
-          name: Checkout source code
-          command: git checkout $CIRCLE_BRANCH
+    # Job for checking out the code
+    checkout_code:
+        docker:
+            - image: circleci/python:3.8
+        steps:
+            - checkout
 
-  linting:
-    docker:
-      - image: circleci/python:3.8
-    steps:
-      - checkout
-      - run:
-          name: Check linting
-          command: |
-            # Run linter (e.g., pylint)
-            pylint --errors-only ./src
+    # Job for linting
+    lint_code:
+        docker:
+            - image: circleci/python:3.8
+        steps:
+            - checkout
+            - run:
+                  name: Lint Code
+                  command: |
+                      echo "Running lint..."
+                      # Insert your lint command here, for example:
+                      # flake8 .
 
-  run_tests:
-    docker:
-      - image: circleci/python:3.8
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: echo "Test done"
+    # Job for testing code
+    run_tests:
+        docker:
+            - image: circleci/python:3.8
+        steps:
+            - checkout
+            - run:
+                  name: Run Tests
+                  command: |
+                      echo "Running tests..."
+                      # Insert your test command here, for example:
+                      # pytest
+            - run:
+                  name: Print Test Done
+                  command: echo "Test done."
 
-  notify_slack:
-    docker:
-      - image: circleci/python:3.8
-    steps:
-      - run:
-          name: Send Slack notification (Phase-2)
-          command: |
-            curl -X POST -H 'Content-type: application/json' --data '{"text": "Job Completed"}' $SLACK_WEBHOOK_URL
-
-  comment_on_pr_failure:
-    docker:
-      - image: circleci/python:3.8
-    steps:
-      - checkout
-      - run:
-          name: Comment on PR if Job Fails
-          command: |
-            GITHUB_API_TOKEN=$GITHUB_TOKEN
-            curl -X POST -H "Authorization: token $GITHUB_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"body": "PR failed at stage: ${CIRCLE_JOB}. Check the job link: ${CIRCLE_BUILD_URL}"}' \
-            https://api.github.com/repos/<owner>/<repo>/issues/${CIRCLE_PULL_REQUEST}/comments
+    # Phase-2: Job for sending Slack notifications
+    send_slack_notification:
+        docker:
+            - image: circleci/python:3.8
+        steps:
+            - run:
+                  name: Send Notification
+                  command: |
+                      # Insert slack notification script here
+                      echo "Sending Slack notification..."
 
 workflows:
-  version: 2
-  feature_pr_workflow:
-    jobs:
-      - checkout_code:
-          filters:
-            branches:
-              only:
-                - dev # Source branch to dev
-      - linting:
-          requires:
-            - checkout_code
-          filters:
-            branches:
-              only:
-                - dev
-      - run_tests:
-          requires:
-            - linting
-          filters:
-            branches:
-              only:
-                - dev
-      - notify_slack:
-          requires:
-            - run_tests
-          filters:
-            branches:
-              only:
-                - dev
-          # Slack notification will always run
-      - comment_on_pr_failure:
-          requires:
-            - run_tests
-          filters:
-            branches:
-              only:
-                - dev
-          # Use `type: fail` to trigger only on failure
-          type: fail
+    version: 2
+    pr_workflow:
+        jobs:
+            - checkout_code:
+                  filters:
+                      branches:
+                          only:
+                              - dev
+                              - staging
+                              - master
 
-  dev_to_stage_workflow:
-    jobs:
-      - checkout_code:
-          filters:
-            branches:
-              only:
-                - staging # Source branch to staging
-      - linting:
-          requires:
-            - checkout_code
-          filters:
-            branches:
-              only:
-                - staging
-      - run_tests:
-          requires:
-            - linting
-          filters:
-            branches:
-              only:
-                - staging
-      - notify_slack:
-          requires:
-            - run_tests
-          filters:
-            branches:
-              only:
-                - staging
-          # Slack notification will always run
-      - comment_on_pr_failure:
-          requires:
-            - run_tests
-          filters:
-            branches:
-              only:
-                - staging
-          type: fail
+            - lint_code:
+                  requires:
+                      - checkout_code
+                  filters:
+                      branches:
+                          only:
+                              - dev
+                              - staging
+                              - master
 
-  stage_to_master_workflow:
-    jobs:
-      - checkout_code:
-          filters:
-            branches:
-              only:
-                - master # Source branch to master
-      - linting:
-          requires:
-            - checkout_code
-          filters:
-            branches:
-              only:
-                - master
-      - run_tests:
-          requires:
-            - linting
-          filters:
-            branches:
-              only:
-                - master
-      - notify_slack:
-          requires:
-            - run_tests
-          filters:
-            branches:
-              only:
-                - master
-          # Slack notification will always run
-      - comment_on_pr_failure:
-          requires:
-            - run_tests
-          filters:
-            branches:
-              only:
-                - master
-          type: fail
+            - run_tests:
+                  requires:
+                      - lint_code
+                  filters:
+                      branches:
+                          only:
+                              - dev
+                              - staging
+                              - master
+
+            - send_slack_notification:
+                  requires:
+                      - run_tests
+                  filters:
+                      branches:
+                          only:
+                              - dev
+                              - staging
+                              - master
+
+commands:
+    add_github_comment:
+        steps:
+            - run:
+                  name: Add GitHub Comment
+                  command: |
+                      if [[ ! -z "$CIRCLE_PULL_REQUEST" ]]; then
+                        gh pr comment $CIRCLE_PULL_REQUEST --body "PR failed on stage $CIRCLE_JOB. [Link: $CIRCLE_BUILD_URL]"
+                      fi
